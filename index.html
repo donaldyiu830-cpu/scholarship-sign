@@ -33,7 +33,7 @@
 <body class="min-h-screen flex flex-col">
     <header class="no-print bg-blue-600 text-white p-3 md:p-4 shadow-md flex justify-between items-center z-10 sticky top-0">
         <div class="flex items-center gap-3 text-lg md:text-xl font-bold">
-            <img src="./logo.png" alt="校徽" class="h-10 w-10 object-contain bg-white rounded-full p-0.5 shadow-sm">
+            <img src="./logo.png" alt="校徽" class="h-10 w-10 object-contain bg-white rounded-full p-0.5 shadow-sm" onerror="this.style.display='none'">
             潮州會館中學獎學金簽收平台
         </div>
         <div id="connection-status" class="flex items-center gap-2 text-xs md:text-sm bg-blue-700 px-3 py-1.5 rounded-full whitespace-nowrap">
@@ -151,7 +151,7 @@
 
                 <div class="flex flex-col gap-3 items-center mt-2">
                     <h3 class="text-lg font-bold text-gray-800 w-full text-left">受獎人簽名：</h3>
-                    <img id="record-signature-img" src="" alt="讀取簽名中..." class="border border-gray-200 rounded-xl w-full h-auto max-h-[350px] object-contain bg-white p-2 shadow-sm">
+                    <img id="record-signature-img" src="" alt="簽名檔" class="border border-gray-200 rounded-xl w-full h-auto max-h-[350px] object-contain bg-white p-2 shadow-sm" onerror="this.onerror=null; this.src=''; this.alt='⚠️ 無法載入簽名圖片（請檢查 Google Drive 資料夾共用權限）'; this.className='border border-red-200 text-red-500 p-4 rounded-xl w-full text-center bg-red-50';">
                 </div>
 
                 <button onclick="window.print()" class="no-print w-full mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold text-lg py-3 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2">
@@ -165,6 +165,7 @@
     </main>
 
     <script>
+        // 請確保這裡是你部署好的 Google Apps Script 網址
         const GOOGLE_APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxn9g9ioXDzgtlAFq7Tq-6lZsJ-Nawn2tORai5Zzap5t3gws722pmvxx35LcP22LlUZ/exec"; 
 
         let studentsData = { pending: [], signed: [] };
@@ -201,12 +202,25 @@
 
         function formatCurrency(amount) { return "$" + amount.toLocaleString(); }
 
-        // 解析並組合 Google Drive 圖片預覽網址
+        // ==========================================
+        // 解析並組合 Google Drive 圖片預覽網址 (全新修正版)
+        // ==========================================
         function getValidImageUrl(url) {
             if (!url) return '';
-            const match = url.match(/id=([a-zA-Z0-9_-]+)/);
-            if (match) {
-                return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+            
+            // 如果網址本身已經是 base64 編碼，直接回傳
+            if (url.startsWith('data:image')) {
+                return url;
+            }
+
+            // 支援解析這兩種常見的 Google Drive 網址格式：
+            // 1. https://drive.google.com/file/d/【ID】/view
+            // 2. https://drive.google.com/open?id=【ID】
+            const match = url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                const id = match[1];
+                // 使用 thumbnail API 繞過第三方 cookie 限制
+                return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
             }
             return url;
         }
@@ -399,8 +413,17 @@
 
             const imgEl = document.getElementById('record-signature-img');
             const safeImgSrc = getValidImageUrl(student.signatureUrl);
-            imgEl.src = safeImgSrc || ''; 
-            imgEl.alt = safeImgSrc ? "簽名檔" : "無簽名圖片";
+            
+            // 重置圖片樣式（避免之前報錯留下的樣式）
+            imgEl.className = "border border-gray-200 rounded-xl w-full h-auto max-h-[350px] object-contain bg-white p-2 shadow-sm";
+            
+            if (safeImgSrc) {
+                imgEl.src = safeImgSrc;
+                imgEl.alt = "簽名檔";
+            } else {
+                imgEl.src = "";
+                imgEl.alt = "資料庫中沒有簽名圖片";
+            }
 
             step1.classList.add('hidden');
             step3.classList.remove('hidden');
@@ -490,7 +513,9 @@
                 if(s.cheque > 0) details.push(`支票 $${s.cheque}`);
 
                 const safeImgSrc = getValidImageUrl(s.signatureUrl);
-                const imgHTML = safeImgSrc ? `<img src="${safeImgSrc}" style="height:40px; object-fit:contain; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"> <span style="display:none; color:#999;">圖片無法讀取</span>` : '無';
+                const imgHTML = safeImgSrc 
+                    ? `<img src="${safeImgSrc}" style="height:40px; object-fit:contain; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"> <span style="display:none; color:red; font-size:12px;">圖片權限未公開</span>` 
+                    : '無';
                 const awardDisplay = s.category ? `${s.award} (${s.category})` : s.award;
 
                 return `
@@ -536,7 +561,7 @@
                 window.print();
                 document.body.classList.remove('print-table-mode');
                 document.getElementById('print-area').innerHTML = '';
-            }, 300);
+            }, 500); // 稍微增加一點延遲，確保圖片有時間載入
         }
     </script>
 </body>
