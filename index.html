@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>獎學金簽收系統</title>
+    <!-- 引入 Tailwind CSS (用於介面設計) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Signature Pad (用於觸控簽名) -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <!-- 引入 SweetAlert2 (用於漂亮的彈出視窗，取代原生的 alert) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- 引入 Phosphor Icons (用於圖示) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            background-color: #f3f4f6;
+            /* 防止在平板上過度滾動或選取文字 */
+            overscroll-behavior-y: none;
+            user-select: none; 
+            -webkit-user-select: none;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            border-radius: 0.5rem;
+            border: 2px dashed #cbd5e1;
+            background-color: #ffffff;
+            touch-action: none; /* 防止在簽名時畫面滾動 */
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 0.5rem;
+        }
+        /* 隱藏捲軸但保持可滾動 */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center z-10">
+        <h1 class="text-2xl font-bold flex items-center gap-2">
+            <i class="ph ph-graduation-cap text-3xl"></i>
+            獎學金簽收系統
+        </h1>
+        <div id="connection-status" class="text-sm bg-blue-700 px-3 py-1 rounded-full flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" id="status-dot"></div>
+            <span id="status-text">載入中...</span>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center hide-scrollbar">
+        
+        <!-- 步驟 1: 選擇學生 -->
+        <div id="step-1" class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-6">
+            <div class="text-center mb-4">
+                <h2 class="text-3xl font-bold text-gray-800">請選擇學生</h2>
+                <p class="text-gray-500 mt-2">請先選擇班級，再點選要簽收獎學金的學生</p>
+            </div>
+
+            <div class="relative">
+                <i class="ph ph-users absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                <select id="class-select" class="w-full pl-12 pr-10 py-4 text-lg border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-0 transition-colors appearance-none bg-white cursor-pointer">
+                    <option value="">請選擇班級...</option>
+                </select>
+                <i class="ph ph-caret-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl pointer-events-none"></i>
+            </div>
+
+            <div id="student-list" class="flex flex-col gap-3 overflow-y-auto max-h-[50vh] pr-2 custom-scrollbar">
+                <!-- 學生列表將透過 JavaScript 動態生成 -->
+                <div class="text-center text-gray-400 py-8 animate-pulse">
+                    正在載入學生資料...
+                </div>
+            </div>
+        </div>
+
+        <!-- 步驟 2: 確認與簽名 -->
+        <div id="step-2" class="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-6 hidden">
+            <button onclick="goBack()" class="self-start flex items-center gap-2 text-blue-600 font-semibold text-lg hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors">
+                <i class="ph ph-arrow-left text-xl"></i> 返回列表
+            </button>
+
+            <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider mb-3">受獎人與獎項資訊</h3>
+                <div class="flex flex-col md:flex-row md:justify-between items-start gap-4">
+                    <div>
+                        <p id="detail-name" class="text-4xl font-bold text-gray-900 mb-2">學生姓名</p>
+                        <p id="detail-award" class="text-xl text-gray-700 flex items-center gap-2 mb-4 md:mb-0">
+                            <i class="ph ph-medal text-blue-500"></i> 獎項名稱
+                        </p>
+                    </div>
+                    <div id="detail-prizes" class="flex flex-col gap-3 w-full md:w-auto border-t md:border-t-0 md:border-l border-blue-200 pt-4 md:pt-0 md:pl-6">
+                        <!-- 獎項明細將在此動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <i class="ph ph-pen-nib"></i> 請在下方空白處簽名
+                    </h3>
+                    <button onclick="clearSignature()" class="text-red-500 hover:bg-red-50 px-3 py-1 rounded flex items-center gap-1 transition-colors">
+                        <i class="ph ph-eraser"></i> 清除重簽
+                    </button>
+                </div>
+                
+                <!-- 簽名板容器 -->
+                <div class="canvas-container shadow-inner">
+                    <canvas id="signature-canvas"></canvas>
+                </div>
+            </div>
+
+            <button onclick="submitSignature()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-2xl font-bold py-5 rounded-xl shadow-lg transition-transform active:scale-[0.98] flex justify-center items-center gap-2 mt-4">
+                <i class="ph ph-check-circle text-3xl"></i>
+                確認並送出簽收
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // ==========================================
+        // 設定區：請將下方 URL 替換為你的 Google Apps Script Web App URL
+        // ==========================================
+        const GOOGLE_APP_SCRIPT_URL = " https://script.google.com/macros/s/AKfycbx9EcEVPZqO-wbDahpaXxf6a4Wn27ELhWOOLN8nxKAEI4IaEFm9-J1RlPHhNKHoZEui/exec"; //
+        
+        // 系統狀態變數
+        let studentsData = [];
+        let selectedStudent = null;
+        let signaturePad = null;
+        let isDemoMode = false;
+
+        // DOM 元素
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const studentListContainer = document.getElementById('student-list');
+        const classSelect = document.getElementById('class-select');
+        const canvas = document.getElementById('signature-canvas');
+
+        // 初始化
+        window.onload = async () => {
+            initSignaturePad();
+            
+            // 處理平板旋轉時的畫布重置
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 班級選擇功能綁定
+            classSelect.addEventListener('change', (e) => renderStudentList(e.target.value));
+
+            await fetchStudentData();
+        };
+
+        // 初始化簽名板
+        function initSignaturePad() {
+            signaturePad = new SignaturePad(canvas, {
+                penColor: "rgb(0, 0, 0)",
+                backgroundColor: "rgba(0,0,0,0)",
+                minWidth: 2,
+                maxWidth: 4
+            });
+            resizeCanvas();
+        }
+
+        // 確保在平板/手機視網膜螢幕上簽名不會模糊或錯位
+        function resizeCanvas() {
+            const ratio =  Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear(); // 調整大小後必須清除畫布
+        }
+
+        // 更新連線狀態 UI
+        function updateStatus(text, colorClass) {
+            document.getElementById('status-text').innerText = text;
+            const dot = document.getElementById('status-dot');
+            dot.className = `w-2 h-2 rounded-full ${colorClass}`;
+        }
+
+        // 從 Google Sheets 獲取資料
+        async function fetchStudentData() {
+            if (!GOOGLE_APP_SCRIPT_URL) {
+                // 如果沒有設定 URL，進入展示模式 (Demo Mode)
+                isDemoMode = true;
+                updateStatus("展示模式 (未連線試算表)", "bg-gray-400");
+                loadMockData();
+                return;
+            }
+
+            try {
+                const response = await fetch(GOOGLE_APP_SCRIPT_URL);
+                const data = await response.json();
+                
+                if(data.error) throw new Error(data.error);
+
+                studentsData = data;
+                updateStatus("已連線", "bg-green-400");
+                populateClassSelect();
+                renderStudentList();
+            } catch (error) {
+                console.error("Fetch error:", error);
+                updateStatus("連線失敗", "bg-red-500");
+                Swal.fire({
+                    icon: 'error',
+                    title: '讀取資料失敗',
+                    text: '無法連接到 Google 試算表，請檢查網址或網路連線。'
+                });
+            }
+        }
+
+        // 產生班級下拉選單
+        function populateClassSelect() {
+            // 取得所有不重複的班級並排序
+            const classes = [...new Set(studentsData.map(s => s.class))].filter(Boolean).sort();
+            
+            // 保留第一個預設選項，清除其他選項
+            classSelect.innerHTML = '<option value="">請選擇班級...</option>';
+            
+            classes.forEach(cls => {
+                const option = document.createElement('option');
+                option.value = cls;
+                option.innerText = cls;
+                classSelect.appendChild(option);
+            });
+        }
+
+        // 渲染學生列表
+        function renderStudentList(selectedClass = '') {
+            studentListContainer.innerHTML = '';
+            
+            if (!selectedClass) {
+                studentListContainer.innerHTML = '<div class="text-center text-gray-500 py-8 text-lg">請從上方選單選擇班級</div>';
+                return;
+            }
+
+            const filtered = studentsData.filter(s => s.class === selectedClass);
+
+            if (filtered.length === 0) {
+                studentListContainer.innerHTML = '<div class="text-center text-gray-500 py-8">該班級目前沒有待簽收的學生</div>';
+                return;
+            }
+
+            filtered.forEach(student => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left bg-gray-50 hover:bg-blue-50 border border-gray-200 p-4 rounded-xl flex justify-between items-center transition-colors active:bg-blue-100";
+                btn.onclick = () => selectStudent(student);
+                
+                // 產生獎項小標籤 (大於 0 的才會顯示)
+                let prizeTags = '';
+                if (student.bookCoupons > 0) prizeTags += `<span class="inline-block bg-orange-100 text-orange-800 text-sm font-semibold px-2 py-1 rounded border border-orange-200">書券 ${formatCurrency(student.bookCoupons)}</span> `;
+                if (student.supermarketCoupons > 0) prizeTags += `<span class="inline-block bg-green-100 text-green-800 text-sm font-semibold px-2 py-1 rounded border border-green-200">超市禮券 ${formatCurrency(student.supermarketCoupons)}</span> `;
+                if (student.cheque > 0) prizeTags += `<span class="inline-block bg-purple-100 text-purple-800 text-sm font-semibold px-2 py-1 rounded border border-purple-200">支票 ${formatCurrency(student.cheque)}</span> `;
+
+                btn.innerHTML = `
+                    <div class="flex-1">
+                        <div class="text-xl font-bold text-gray-800">${student.name}</div>
+                        <div class="text-gray-500 text-sm mt-1 mb-3">${student.award}</div>
+                        <div class="flex flex-wrap gap-2">${prizeTags}</div>
+                    </div>
+                    <div class="text-right pl-4">
+                        <i class="ph ph-caret-right text-gray-400 text-2xl"></i>
+                    </div>
+                `;
+                studentListContainer.appendChild(btn);
+            });
+        }
+
+        // 格式化金額
+        function formatCurrency(amount) {
+            return "$" + amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        // 選擇學生，進入簽名畫面
+        function selectStudent(student) {
+            selectedStudent = student;
+            
+            // 填入資料
+            document.getElementById('detail-name').innerText = student.name;
+            document.getElementById('detail-award').innerHTML = `<i class="ph ph-medal text-blue-500"></i> ${student.award}`;
+            
+            // 填入獎項明細
+            const prizesContainer = document.getElementById('detail-prizes');
+            prizesContainer.innerHTML = ''; // 清空
+            
+            if (student.bookCoupons > 0) {
+                prizesContainer.innerHTML += `
+                    <div class="flex justify-between items-center gap-6">
+                        <span class="text-gray-600 font-semibold flex items-center gap-2"><i class="ph ph-book-open text-orange-500 text-xl"></i> 書券</span>
+                        <span class="text-2xl font-bold text-orange-600">${formatCurrency(student.bookCoupons)}</span>
+                    </div>`;
+            }
+            if (student.supermarketCoupons > 0) {
+                prizesContainer.innerHTML += `
+                    <div class="flex justify-between items-center gap-6">
+                        <span class="text-gray-600 font-semibold flex items-center gap-2"><i class="ph ph-shopping-cart text-green-500 text-xl"></i> 超市禮券</span>
+                        <span class="text-2xl font-bold text-green-600">${formatCurrency(student.supermarketCoupons)}</span>
+                    </div>`;
+            }
+            if (student.cheque > 0) {
+                prizesContainer.innerHTML += `
+                    <div class="flex justify-between items-center gap-6">
+                        <span class="text-gray-600 font-semibold flex items-center gap-2"><i class="ph ph-money text-purple-500 text-xl"></i> 支票</span>
+                        <span class="text-2xl font-bold text-purple-600">${formatCurrency(student.cheque)}</span>
+                    </div>`;
+            }
+            
+            // 重置簽名板
+            resizeCanvas();
+            signaturePad.clear();
+
+            // 切換畫面
+            step1.classList.add('hidden');
+            step2.classList.remove('hidden');
+        }
+
+        // 返回列表
+        function goBack() {
+            selectedStudent = null;
+            step2.classList.add('hidden');
+            step1.classList.remove('hidden');
+            // 返回時維持當前選擇的班級，並重新渲染列表（已簽收的學生會消失）
+            renderStudentList(classSelect.value);
+        }
+
+        // 清除簽名
+        function clearSignature() {
+            signaturePad.clear();
+        }
+
+        // 提交簽名
+        async function submitSignature() {
+            if (signaturePad.isEmpty()) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '尚未簽名',
+                    text: '請在空白處簽名後再送出。',
+                    confirmButtonColor: '#3085d6'
+                });
+                return;
+            }
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin text-3xl"></i> 處理中...';
+            btn.classList.add('opacity-75');
+
+            // 取得簽名的 Base64 圖片資料
+            const signatureDataUrl = signaturePad.toDataURL('image/png');
+
+            if (isDemoMode) {
+                // 展示模式的假送出
+                setTimeout(() => {
+                    handleSuccess();
+                    resetSubmitButton(btn);
+                }, 1000);
+                return;
+            }
+
+            try {
+                // 傳送資料到 Google Apps Script
+                const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        row: selectedStudent.row,
+                        name: selectedStudent.name,
+                        signature: signatureDataUrl
+                    }),
+                    // 注意：在 GAS 搭配 POST 時，有時會需要設定 text/plain 以避免 preflight CORS
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    handleSuccess();
+                } else {
+                    throw new Error(result.error || '不明錯誤');
+                }
+            } catch (error) {
+                console.error("Submit error:", error);
+                Swal.fire({
+                    icon: 'error',
+                    title: '送出失敗',
+                    text: '請檢查網路連線或稍後再試。',
+                    confirmButtonColor: '#3085d6'
+                });
+            } finally {
+                resetSubmitButton(btn);
+            }
+        }
+
+        function handleSuccess() {
+            Swal.fire({
+                icon: 'success',
+                title: '簽收完成！',
+                text: `${selectedStudent.name} 的獎學金已確認簽收。`,
+                timer: 2500,
+                showConfirmButton: false
+            });
+
+            // 從列表中移除已簽收的學生
+            studentsData = studentsData.filter(s => s.row !== selectedStudent.row);
+            
+            // 如果該班級所有學生都簽收完畢，可以選擇重置選單或保留
+            // 這裡選擇重新整理選單，避免空班級一直留著
+            populateClassSelect(); 
+            
+            goBack();
+        }
+
+        function resetSubmitButton(btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ph ph-check-circle text-3xl"></i> 確認並送出簽收';
+            btn.classList.remove('opacity-75');
+        }
+
+        // 產生假資料 (用於尚未連接 Google Sheet 時的預覽)
+        function loadMockData() {
+            studentsData = [
+                { row: 2, class: '一年甲班', name: '王小明', award: '書卷獎學金', bookCoupons: 500, supermarketCoupons: 0, cheque: 4500 },
+                { row: 3, class: '一年甲班', name: '林心如', award: '語文競賽特優', bookCoupons: 1000, supermarketCoupons: 1000, cheque: 0 },
+                { row: 4, class: '二年乙班', name: '李大華', award: '清寒助學金', bookCoupons: 0, supermarketCoupons: 3000, cheque: 5000 },
+                { row: 5, class: '二年乙班', name: '張雅婷', award: '傑出體育表現獎', bookCoupons: 0, supermarketCoupons: 0, cheque: 3500 },
+                { row: 6, class: '三年丙班', name: '陳建宏', award: '校友會特別獎學金', bookCoupons: 2000, supermarketCoupons: 3000, cheque: 5000 }
+            ];
+            populateClassSelect();
+            renderStudentList();
+        }
+    </script>
+</body>
+</html>
