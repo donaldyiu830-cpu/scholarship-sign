@@ -44,7 +44,7 @@
 
     <main class="flex-1 max-w-7xl mx-auto w-full pt-4 md:pt-8 px-4 pb-12 flex flex-col lg:flex-row gap-6">
         
-        <aside class="w-full lg:w-1/3 bg-white rounded-2xl shadow-lg p-5 no-print h-fit sticky top-24">
+        <aside class="w-full lg:w-1/3 bg-white rounded-2xl shadow-lg p-5 no-print h-fit order-2 lg:order-1 lg:sticky top-24">
             <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <i class="ph ph-chart-bar text-blue-600"></i> 各班簽收進度
             </h2>
@@ -64,7 +64,7 @@
             </div>
         </aside>
 
-        <div class="w-full lg:w-2/3 flex flex-col items-center">
+        <div class="w-full lg:w-2/3 flex flex-col items-center order-1 lg:order-2">
             
             <div id="step-1" class="w-full bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-4">
                 <div class="flex w-full bg-gray-100 p-1.5 rounded-xl no-print">
@@ -149,6 +149,11 @@
                     </div>
                 </div>
 
+                <div class="flex flex-col gap-3 items-center mt-2">
+                    <h3 class="text-lg font-bold text-gray-800 w-full text-left">受獎人簽名：</h3>
+                    <img id="record-signature-img" src="" alt="讀取簽名中..." class="border border-gray-200 rounded-xl w-full h-auto max-h-[350px] object-contain bg-white p-2 shadow-sm">
+                </div>
+
                 <button onclick="window.print()" class="no-print w-full mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold text-lg py-3 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2">
                     <i class="ph ph-printer text-xl"></i> 列印單張收據
                 </button>
@@ -196,11 +201,12 @@
 
         function formatCurrency(amount) { return "$" + amount.toLocaleString(); }
 
+        // 解析並組合 Google Drive 圖片預覽網址
         function getValidImageUrl(url) {
             if (!url) return '';
             const match = url.match(/id=([a-zA-Z0-9_-]+)/);
             if (match) {
-                return `https://lh3.googleusercontent.com/d/$$${match[1]}`;
+                return `https://drive.google.com/uc?export=view&id=${match[1]}`;
             }
             return url;
         }
@@ -218,7 +224,6 @@
                 studentsData = data;
                 updateStatus("已連線", "bg-green-400");
                 
-                // 渲染左側進度表與右側名單
                 renderSummaryTable();
                 populateClassSelect();
                 renderStudentList(classSelect.value);
@@ -392,6 +397,11 @@
             document.getElementById('record-time').innerHTML = `<i class="ph ph-clock"></i> 簽收時間：${student.timestamp}`;
             document.getElementById('record-prizes').innerHTML = generatePrizesHTML(student);
 
+            const imgEl = document.getElementById('record-signature-img');
+            const safeImgSrc = getValidImageUrl(student.signatureUrl);
+            imgEl.src = safeImgSrc || ''; 
+            imgEl.alt = safeImgSrc ? "簽名檔" : "無簽名圖片";
+
             step1.classList.add('hidden');
             step3.classList.remove('hidden');
             window.scrollTo(0, 0);
@@ -429,7 +439,7 @@
                 
                 if(result.success) {
                     Swal.fire({ icon: 'success', title: '簽收完成！', timer: 2000, showConfirmButton: false });
-                    await fetchStudentData(); // 這個函式已經包含了重新渲染左側統計表的功能
+                    await fetchStudentData(); 
                     goBack();
                 } else {
                     throw new Error(result.error);
@@ -480,7 +490,7 @@
                 if(s.cheque > 0) details.push(`支票 $${s.cheque}`);
 
                 const safeImgSrc = getValidImageUrl(s.signatureUrl);
-                const imgHTML = safeImgSrc ? `<img src="${safeImgSrc}" style="height:40px; object-fit:contain; margin:0 auto;">` : '無';
+                const imgHTML = safeImgSrc ? `<img src="${safeImgSrc}" style="height:40px; object-fit:contain; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"> <span style="display:none; color:#999;">圖片無法讀取</span>` : '無';
                 const awardDisplay = s.category ? `${s.award} (${s.category})` : s.award;
 
                 return `
@@ -505,7 +515,7 @@
                     <thead>
                         <tr style="background-color: #f3f4f6;">
                             <th style="border: 1px solid #000; padding: 10px; width: 10%;">班級</th>
-                            <th style="border: 1px solid #000; padding: 10px; width: 8%;">座號</th>
+                            <th style="border: 1px solid #000; padding: 10px; width: 8%;">學號</th>
                             <th style="border: 1px solid #000; padding: 10px; width: 12%;">姓名</th>
                             <th style="border: 1px solid #000; padding: 10px; width: 20%;">獎項</th>
                             <th style="border: 1px solid #000; padding: 10px; width: 15%;">金額明細</th>
