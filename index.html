@@ -61,24 +61,48 @@
 
     <main class="flex-1 max-w-7xl mx-auto w-full pt-4 md:pt-8 px-4 pb-12 flex flex-col lg:flex-row gap-6">
         
-        <aside class="w-full lg:w-1/3 bg-white rounded-2xl shadow-lg p-5 no-print h-fit order-2 lg:order-1 lg:sticky top-24">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <i class="ph ph-chart-bar text-blue-600"></i> 各班簽收進度
-            </h2>
-            <div class="overflow-x-auto rounded-lg border border-gray-200">
-                <table class="w-full text-sm text-center border-collapse">
-                    <thead>
-                        <tr class="bg-gray-100 text-gray-600">
-                            <th class="p-3 border-b border-gray-200 font-semibold">班級</th>
-                            <th class="p-3 border-b border-gray-200 font-semibold">待簽收</th>
-                            <th class="p-3 border-b border-gray-200 font-semibold">已簽收</th>
-                        </tr>
-                    </thead>
-                    <tbody id="summary-table-body">
-                        <tr><td colspan="3" class="p-4 text-gray-500">資料讀取中...</td></tr>
-                    </tbody>
-                </table>
+        <aside class="w-full lg:w-1/3 flex flex-col gap-5 no-print h-fit order-2 lg:order-1 lg:sticky top-24">
+            
+            <div class="bg-white rounded-2xl shadow-lg p-5">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="ph ph-chart-bar text-blue-600"></i> 各班簽收進度
+                </h2>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-sm text-center border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-600">
+                                <th class="p-3 border-b border-gray-200 font-semibold">班級</th>
+                                <th class="p-3 border-b border-gray-200 font-semibold w-20">待簽收</th>
+                                <th class="p-3 border-b border-gray-200 font-semibold w-20">已簽收</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-table-body">
+                            <tr><td colspan="3" class="p-4 text-gray-500">資料讀取中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-5">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i class="ph ph-medal text-purple-600"></i> 各獎項簽收進度
+                </h2>
+                <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[400px] overflow-y-auto">
+                    <table class="w-full text-sm text-center border-collapse relative">
+                        <thead class="sticky top-0 bg-gray-100 shadow-sm z-10">
+                            <tr class="text-gray-600">
+                                <th class="p-3 border-b border-gray-200 font-semibold text-left">獎項名稱</th>
+                                <th class="p-3 border-b border-gray-200 font-semibold w-16 whitespace-nowrap">待簽收</th>
+                                <th class="p-3 border-b border-gray-200 font-semibold w-16 whitespace-nowrap">已簽收</th>
+                            </tr>
+                        </thead>
+                        <tbody id="award-summary-table-body">
+                            <tr><td colspan="3" class="p-4 text-gray-500">資料讀取中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
         </aside>
 
         <div class="w-full lg:w-2/3 flex flex-col items-center order-1 lg:order-2">
@@ -258,39 +282,70 @@
         }
 
         function renderSummaryTable() {
-            const tbody = document.getElementById('summary-table-body');
+            const classTbody = document.getElementById('summary-table-body');
+            const awardTbody = document.getElementById('award-summary-table-body');
+            
             const pending = studentsData.pending || [];
             const signed = studentsData.signed || [];
             
             const classStats = {};
+            const awardStats = {};
             
+            // 計算待簽收
             pending.forEach(s => {
                 if(!classStats[s.class]) classStats[s.class] = { pending: 0, signed: 0 };
                 classStats[s.class].pending++;
+
+                if(s.award) {
+                    if(!awardStats[s.award]) awardStats[s.award] = { pending: 0, signed: 0 };
+                    awardStats[s.award].pending++;
+                }
             });
             
+            // 計算已簽收
             signed.forEach(s => {
                 if(!classStats[s.class]) classStats[s.class] = { pending: 0, signed: 0 };
                 classStats[s.class].signed++;
+
+                if(s.award) {
+                    if(!awardStats[s.award]) awardStats[s.award] = { pending: 0, signed: 0 };
+                    awardStats[s.award].signed++;
+                }
             });
 
+            // 渲染班級進度表
             const classes = Object.keys(classStats).filter(Boolean).sort();
-            
             if (classes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-gray-500">目前無任何資料</td></tr>';
-                return;
+                classTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-gray-500">目前無任何資料</td></tr>';
+            } else {
+                classTbody.innerHTML = classes.map(cls => {
+                    const stat = classStats[cls];
+                    return `
+                        <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td class="p-3 font-bold text-gray-700">${cls}</td>
+                            <td class="p-3 text-orange-500 font-semibold">${stat.pending > 0 ? stat.pending : '-'}</td>
+                            <td class="p-3 text-green-600 font-semibold">${stat.signed > 0 ? stat.signed : '-'}</td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
-            tbody.innerHTML = classes.map(cls => {
-                const stat = classStats[cls];
-                return `
-                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td class="p-3 font-bold text-gray-700">${cls}</td>
-                        <td class="p-3 text-orange-500 font-semibold">${stat.pending > 0 ? stat.pending : '-'}</td>
-                        <td class="p-3 text-green-600 font-semibold">${stat.signed > 0 ? stat.signed : '-'}</td>
-                    </tr>
-                `;
-            }).join('');
+            // 渲染獎項進度表
+            const awards = Object.keys(awardStats).filter(Boolean).sort();
+            if (awards.length === 0) {
+                awardTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-gray-500">目前無任何資料</td></tr>';
+            } else {
+                awardTbody.innerHTML = awards.map(award => {
+                    const stat = awardStats[award];
+                    return `
+                        <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td class="p-3 font-bold text-gray-700 text-left text-xs">${award}</td>
+                            <td class="p-3 text-orange-500 font-semibold">${stat.pending > 0 ? stat.pending : '-'}</td>
+                            <td class="p-3 text-green-600 font-semibold">${stat.signed > 0 ? stat.signed : '-'}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
         }
 
         function switchTab(tab) {
@@ -510,9 +565,6 @@
             }
         }
 
-        // ==========================================
-        // 改良版列印函式 (加入圖片預先載入等待機制)
-        // ==========================================
         function generatePrintTable(data, title) {
             const tbody = data.map(s => {
                 let details = [];
@@ -565,7 +617,6 @@
             document.getElementById('print-area').innerHTML = tableHTML;
             document.body.classList.add('print-table-mode');
             
-            // 顯示提示視窗，避免畫面看似當機
             Swal.fire({
                 title: '準備列印中...',
                 text: '正在載入簽名圖片，請稍候',
@@ -578,12 +629,12 @@
             const totalImages = images.length;
 
             const executePrint = () => {
-                Swal.close(); // 關閉提示
+                Swal.close();
                 setTimeout(() => {
                     window.print();
                     document.body.classList.remove('print-table-mode');
                     document.getElementById('print-area').innerHTML = '';
-                }, 300); // 稍微緩衝讓畫面重繪
+                }, 300); 
             };
 
             if (totalImages === 0) {
@@ -591,7 +642,6 @@
                 return;
             }
 
-            // 監聽每一張圖片的載入狀態
             images.forEach(img => {
                 if (img.complete) {
                     loadedCount++;
@@ -604,7 +654,6 @@
                 }
             });
 
-            // 防呆機制：如果遇到網路太慢或部分圖片死掉，最多等 3 秒就強制開啟列印視窗
             setTimeout(() => {
                 if (loadedCount < totalImages) executePrint();
             }, 3000);
