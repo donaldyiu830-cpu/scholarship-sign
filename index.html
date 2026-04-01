@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="logo.png">
+<meta name="theme-color" content="#2563eb">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>潮州會館中學獎學金簽收平台</title>
@@ -659,5 +662,18 @@
             }, 3000);
         }
     </script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                })
+                .catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+        });
+    }
+</script>
 </body>
 </html>
